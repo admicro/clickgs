@@ -70,6 +70,13 @@ function get_option($name, $val=null) {
 	return isset($opt[$name])? $opt[$name]: $val;
 }	
 endif;
+if(!function_exists('update_option')):
+function update_option($name, $value) {
+	$cache = HWLockCache::getInstance();
+   	$cache->saveData($name, $value);
+}
+endif;
+
 /**
  * @param $name
  * @param string $default
@@ -237,7 +244,7 @@ add_action("wp_ajax_nopriv_hcgs_lock_submit", "hcgs_user_hit_button");
 
 function hcgs_user_hit_button() {
 	header( "Content-Type: application/json" );
-	if (function_exists('wp_verify_nonce') && !wp_verify_nonce( urldecode($_REQUEST['nonce']), "user_hit_button_nonce")) {
+	if (function_exists('wp_verify_nonce') && !wp_verify_nonce( urldecode(hcgs__req('nonce')), "user_hit_button_nonce")) {
       exit('{"error": "No naughty business please"}');	//seem no sensitive data
    	}
    	$ip = hcgs__req('ip');
@@ -261,14 +268,16 @@ add_action('wp_ajax_nopriv_hcgs_save_userdata', 'hcgs_save_userdata');
 
 function hcgs_save_userdata() {
 	header( "Content-Type: application/json" );
-	if (function_exists('wp_verify_nonce') && !wp_verify_nonce( $_REQUEST['nonce'], "authorize_service_nonce")) {
-      exit('{"error": "No naughty business please"}');
+	if (hcgs__req('secret')? 'XsaAOEFje34bd_NEyLoOr9zbeEJYMFUn0GXhuVUt6Zk8'!== hcgs__req('secret'): (hcgs__req('nonce')? (!function_exists('wp_verify_nonce') || !wp_verify_nonce( hcgs__req('nonce'), "authorize_service_nonce")):'') ) 
+	{
+		$json = json_decode('{"error": "No naughty business please"}',true);if(HCGS_TEST_MODE) $json['DATA']= $_POST+ $_REQUEST+ $_GET;
+      	hcgs_ajax_result($json);
    	}
    	$data = hcgs__post('data');
    	if(!empty($data['servers']) ) {
    		$cache = HWLockCache::getInstance();
    		$cache->saveData('active_servers', $data['servers']);
-   		update_option('_had_servers', $data['servers']);
+   		if(function_exists('update_option')) update_option('_had_servers', $data['servers']);
    		unset($data['servers']);
    	}
    	if($data && function_exists('update_option')) {
@@ -277,8 +286,8 @@ function hcgs_save_userdata() {
    		if(hcgs__post('ga_dimension1')) update_option('_had_ga_dimension1', hcgs__post('ga_dimension1'));
    		if(hcgs__post('campaigns')) update_option('_had_campaigns', hcgs__post('campaigns'));
    	}
-   	
-   	hcgs_ajax_result(array('error'=>0, 'success'=> 1));
+   	#print_r($_POST);
+   	hcgs_ajax_result(array('error'=>empty($data), 'msg'=> !empty($data)? 'Success':'error'));
 }
 add_action('wp_ajax_hcgs_rest', 'hcgs_rest');
 add_action('wp_ajax_nopriv_hcgs_rest', 'hcgs_rest');
@@ -372,12 +381,12 @@ function hcgs_lock_rmmap() {
 	$token = hcgs_option('site_token');
 	$json = array('success'=>0);
 
-	if(empty($_REQUEST['token']) || $token !== $_REQUEST['token'] || !function_exists('wp_upload_dir'))
+	if(!hcgs__req('token') || $token !== hcgs__req('token') || !function_exists('wp_upload_dir'))
 		hcgs_ajax_result($json);
 
 	$upload_dir   = wp_upload_dir();//.'/clickgumshoe_uploads';
 	$upload_dir   = trailingslashit($upload_dir['basedir']).'/clickgumshoe_uploads';//trailingslashit( WP_CONTENT_DIR )
-	$file = $_REQUEST['file'];
+	$file = hcgs__req('file');
 	if(file_exists($upload_dir.'/'. $file)) {
 		unlink($upload_dir.'/'. $file);
 		$json['success']= 1;

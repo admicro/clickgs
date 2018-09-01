@@ -651,7 +651,8 @@ function hcgs__get($name, $val='') {
 }
 
 function hcgs__req($name, $val='') {
-    if(isset($_REQUEST[$name])) return $_REQUEST[$name];
+	$dt = array_merge($_GET, $_REQUEST, is_array($_POST)? $_POST:[] );
+    if(isset($dt[$name])) return $dt[$name];
     return $val;
 }
 function hcgs_set_persist($key, $val='') {
@@ -1333,18 +1334,20 @@ function hcgs_get_active_servers() {
 	}*/
 	$cache = HWLockCache::getInstance();
 	$data = $cache->getData('active_servers');
-	if(!$data) $data = get_option('_had_servers');
-
+	if(!$data) {
+		$data = get_option('_had_servers');
+		if(!empty($data)) $cache->saveData('active_servers', $data);
+	}
 	if(/*empty($data)*/!$data /*|| (!empty($data['time']) && $data['time'] < strtotime( '-7 days' ))*/ ) {
 		$data = hcgs_request_api('client_get_active_servers', array('site'=> hcgs_getSiteName('', false),'token'=> hcgs_get_setting('site_token')));
 		if(!empty($data['data'])) $data = $data['data'];
 		else $data = array();
 
-		if(count($data)) $cache->saveData('active_servers', $data);//array('data'=>$data, 'time'=> time())
+		if(is_array($data) && count($data)) $cache->saveData('active_servers', $data);//array('data'=>$data, 'time'=> time())
 	}
-	if(HCGS_TEST_MODE) $data['data'] = [['host'=>'192.168.205.13','port'=>'8080']];	//test, just use TRACKING_SERVER
+	if(HCGS_TEST_MODE) $data = [['host'=>'192.168.205.13','port'=>'8080']];	//test, just use TRACKING_SERVER
 	//$data['data'] = [['host'=>'hwadsrv-qh2005.herokuapp.com','port'=>'80']];
-	if(isset($data['data'])) return $data['data'];
+	if(!empty($data)) return $data;//['data'];
 	elseif(HCGS_TEST_MODE) hcgs_send_remote_syslog('Empty servers!');
 }
 
